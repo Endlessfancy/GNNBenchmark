@@ -7,6 +7,11 @@ import time
 from torch import Tensor
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
+import intel_npu_acceleration_library
+import torch._dynamo
+
+# Suppress errors to fall back to eager execution if needed
+torch._dynamo.config.suppress_errors = True
 
 # load dataset
 dataset = Reddit2(root='/tmp/Reddit2')
@@ -53,6 +58,9 @@ model = GCN(hidden_channels=16)
 model = GCN(hidden_channels=16)
 model.load_state_dict(torch.load('Reddit2_GCN_weights.pth'))
 
+# Compile the model for NPU
+optimized_model = torch.compile(model, backend="npu")
+
 # Measure inference time
 def measure_inference_time(model, data):
     model.eval()
@@ -65,5 +73,5 @@ def measure_inference_time(model, data):
     return inference_time
 
 
-avg_inference_time = measure_inference_time(model, data)
+avg_inference_time = measure_inference_time(optimized_model, data)
 print(f'Average inference time Reddit2: {avg_inference_time:.3f} ms')
