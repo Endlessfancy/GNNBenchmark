@@ -1,19 +1,22 @@
 import torch
 import torch.nn.functional as F
-from ogb.nodeproppred import Evaluator, PygNodePropPredDataset
-from tqdm import tqdm
-import torch
-import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
-from torch_geometric.datasets import Reddit2
+from torch_geometric.datasets import Flickr
+from torch_geometric.datasets import Planetoid
 from torch_geometric.transforms import NormalizeFeatures
 import time
 from torch import Tensor
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
+import intel_npu_acceleration_library
+import torch._dynamo
+
+# Suppress errors to fall back to eager execution if needed
+torch._dynamo.config.suppress_errors = True
+
 
 # load dataset
-dataset = PygNodePropPredDataset('ogbn-products', root="/tmp/ogbnProduct")
+dataset = Flickr(root='/tmp/Flickr')
 data = dataset[0]
 
 
@@ -51,23 +54,28 @@ model = GCN(hidden_channels=16)
 #     train()
 #
 # # save weight
-# torch.save(model.state_dict(), 'ogbnProduct_GCN_weights.pth')
+# torch.save(model.state_dict(), 'Flickr_GCN_weights.pth')
 
 # load
 model = GCN(hidden_channels=16)
-model.load_state_dict(torch.load('ogbnProduct_GCN_weights.pth'))
+model.load_state_dict(torch.load('../Weights/Flickr_GCN_weights.pth'))
 
-# Measure inference time
-def measure_inference_time(model, data):
+# Compile the model for NPU
+optimized_model = torch.compile(model, backend="npu")
+
+def measure_inference_time(model, data, runs):
     model.eval()
-    with torch.no_grad():
+    timings = []
+    model(data.x, data.edge_index)
+    # with torch.no_grad():
+    for i in range(runs):
         start_time = time.time()
         model(data.x, data.edge_index)  # Inference on the whole graph
         end_time = time.time()
-    # Calculate time for the whole graph and average per node in the test mask
-    inference_time = (end_time - start_time) * 1000
+        timings.append(end_time - start_time)
+    inference_time = sum(timings) / runs * 1000
     return inference_time
 
 
-avg_inference_time = measure_inference_time(model, data)
-print(f'Average inference time per node: {avg_inference_time:.3f} ms')
+avg_inference_time = measure_inference_time(optimized_model, data, 10)
+print(f'Average inference time Cora: {avg_inference_time:.3f} ms')

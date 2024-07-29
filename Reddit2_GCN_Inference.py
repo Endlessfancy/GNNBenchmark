@@ -1,8 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
-from torch_geometric.datasets import Flickr
-from torch_geometric.datasets import Planetoid
+from torch_geometric.datasets import Reddit2
 from torch_geometric.transforms import NormalizeFeatures
 import time
 from torch import Tensor
@@ -10,7 +9,7 @@ from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
 
 # load dataset
-dataset = Flickr(root='/tmp/Flickr')
+dataset = Reddit2(root='/tmp/Reddit2')
 data = dataset[0]
 
 
@@ -48,11 +47,20 @@ model = GCN(hidden_channels=16)
 #     train()
 #
 # # save weight
-# torch.save(model.state_dict(), 'Flickr_GCN_weights.pth')
+# torch.save(model.state_dict(), 'Reddit2_GCN_weights.pth')
 
 # load
 model = GCN(hidden_channels=16)
-model.load_state_dict(torch.load('Flickr_GCN_weights.pth'))
+model.load_state_dict(torch.load('Weights/Reddit2_GCN_weights.pth'))
+
+# Dummy input for the model
+dummy_input = (data.x, data.edge_index)
+
+# Export the model to ONNX format
+torch.onnx.export(model, dummy_input, 'Onnx/Reddit2_GCN.onnx', opset_version=11,
+                  input_names=['x', 'edge_index'],
+                  output_names=['output'])
+                 
 
 # Measure inference time
 def measure_inference_time(model, data):
@@ -67,4 +75,4 @@ def measure_inference_time(model, data):
 
 
 avg_inference_time = measure_inference_time(model, data)
-print(f'Average inference time Flickr: {avg_inference_time:.3f} ms')
+print(f'Average inference time Reddit2: {avg_inference_time:.3f} ms')

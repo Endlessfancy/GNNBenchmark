@@ -1,20 +1,16 @@
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
-from torch_geometric.datasets import Reddit2
+from torch_geometric.datasets import Flickr
+from torch_geometric.datasets import Planetoid
 from torch_geometric.transforms import NormalizeFeatures
 import time
 from torch import Tensor
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
-import intel_npu_acceleration_library
-import torch._dynamo
-
-# Suppress errors to fall back to eager execution if needed
-torch._dynamo.config.suppress_errors = True
 
 # load dataset
-dataset = Reddit2(root='/tmp/Reddit2')
+dataset = Flickr(root='/tmp/Flickr')
 data = dataset[0]
 
 
@@ -52,21 +48,28 @@ model = GCN(hidden_channels=16)
 #     train()
 #
 # # save weight
-# torch.save(model.state_dict(), 'Reddit2_GCN_weights.pth')
+# torch.save(model.state_dict(), 'Flickr_GCN_weights.pth')
 
 # load
 model = GCN(hidden_channels=16)
-model.load_state_dict(torch.load('../Weights/Reddit2_GCN_weights.pth'))
+model.load_state_dict(torch.load('Weights/Flickr_GCN_weights.pth'))
 
-# Compile the model for NPU
-optimized_model = torch.compile(model, backend="npu")
+# # Dummy input for the model
+# dummy_input = (data.x, data.edge_index)
+#
+# # Export the model to ONNX format
+# torch.onnx.export(model, dummy_input, 'Flickr_GCN.onnx', opset_version=11,
+#                   input_names=['x', 'edge_index'],
+#                   output_names=['output'])
+                 
+
 
 # Measure inference time
-
 def measure_inference_time(model, data, runs):
     model.eval()
     timings = []
-    model(data.x, data.edge_index)
+    for i in range(5):
+        model(data.x, data.edge_index)
     # with torch.no_grad():
     for i in range(runs):
         start_time = time.time()
@@ -76,8 +79,5 @@ def measure_inference_time(model, data, runs):
     inference_time = sum(timings) / runs * 1000
     return inference_time
 
-
-avg_inference_time = measure_inference_time(optimized_model, data, 5)
-print(f'Average inference time Cora: {avg_inference_time:.3f} ms')
-
-
+avg_inference_time = measure_inference_time(model, data, 100)
+print(f'Model: GCN, Dataset: Flickr, Average inference time: {avg_inference_time:.3f} ms')

@@ -1,17 +1,16 @@
 import torch
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
-from torch_geometric.datasets import Reddit2
+from torch_geometric.datasets import Planetoid
 from torch_geometric.transforms import NormalizeFeatures
 import time
 from torch import Tensor
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, degree
 
-# load dataset
-dataset = Reddit2(root='/tmp/Reddit2')
+# Load and preprocess the dataset
+dataset = Planetoid(root='/tmp/Cora', name='Cora', transform=NormalizeFeatures())
 data = dataset[0]
-
 
 # Define the GCN model
 class GCN(torch.nn.Module):
@@ -28,42 +27,34 @@ class GCN(torch.nn.Module):
 
 
 model = GCN(hidden_channels=16)
-# optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
-# criterion = torch.nn.CrossEntropyLoss()
-#
-#
-# def train():
-#     model.train()
-#     optimizer.zero_grad()
-#     out = model(data.x, data.edge_index)
-#     loss = criterion(out[data.train_mask], data.y[data.train_mask])
-#     loss.backward()
-#     optimizer.step()
-#     return loss
-#
-#
-# # Run training cycles
-# for epoch in range(1, 101):
-#     train()
-#
-# # save weight
-# torch.save(model.state_dict(), 'Reddit2_GCN_weights.pth')
 
 # load
 model = GCN(hidden_channels=16)
-model.load_state_dict(torch.load('Reddit2_GCN_weights.pth'))
+model.load_state_dict(torch.load('Weights/Cora_GCN_weights.pth'))
+
+# Dummy input for the model
+dummy_input = (data.x, data.edge_index)
+
+# Export the model to ONNX format
+torch.onnx.export(model, dummy_input, 'Onnx/Cora_GCN.onnx', opset_version=11,
+                  input_names=['x', 'edge_index'],
+                  output_names=['output'])
 
 # Measure inference time
-def measure_inference_time(model, data):
+def measure_inference_time(model, data, runs):
     model.eval()
-    with torch.no_grad():
+    timings = []
+    for i in range(5):
+        model(data.x, data.edge_index)
+    # with torch.no_grad():
+    for i in range(runs):
         start_time = time.time()
         model(data.x, data.edge_index)  # Inference on the whole graph
         end_time = time.time()
-    # Calculate time for the whole graph and average per node in the test mask
-    inference_time = (end_time - start_time) * 1000
+        timings.append(end_time - start_time)
+    inference_time = sum(timings) / runs * 1000
     return inference_time
 
+avg_inference_time = measure_inference_time(model, data, 100)
+print(f'Model: GCN, Dataset: Cora, Average inference time: {avg_inference_time:.3f} ms')
 
-avg_inference_time = measure_inference_time(model, data)
-print(f'Average inference time Reddit2: {avg_inference_time:.3f} ms')
