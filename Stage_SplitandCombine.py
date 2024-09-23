@@ -268,7 +268,7 @@ def test_combined_model_output(combined_model, selected_model_list, data):
 # -------------------------------
 # Export the model
 # -------------------------------
-def export_combined_model_to_onnx(combined_model, selected_model_list, data):
+def export_combined_model_to_onnx(combined_model, selected_model_list, data, model_onnx_path):
     # define the first layer and last layer:
     first_layer = selected_model_list[0]
     last_layer = selected_model_list[-1]
@@ -357,7 +357,7 @@ def export_combined_model_to_onnx(combined_model, selected_model_list, data):
     torch.onnx.export(
         combined_model,
         dummy_inputs,
-        "Onnx/combined_model.onnx",
+        model_onnx_path,
         input_names=input_names,
         output_names=output_names,
         opset_version=11,
@@ -370,24 +370,44 @@ def export_combined_model_to_onnx(combined_model, selected_model_list, data):
 # Export combined model with dynamic input/output based on first and last layers
 # export_combined_model_to_onnx(combined_model, selected_model_list, data)
 # model_sequence = []
-for i in range(1, 5):
-    for j in range(i, 5):
-        model_sequence = list(range(i, j + 1))
-        print(model_sequence)
-        # Map the numbers to actual models
-        # model_sequence = [2]
-        model_map = {
-            1: gcn_norm_model,
-            2: linear_model,
-            3: before_msg_model,
-            4: after_msg_model
-        }
-        selected_model_list = []
-        for model_number in model_sequence:
-            selected_model_list.append(model_map[model_number])
-        # print(selected_model_list)
+# for i in range(1, 5):
+#     for j in range(i, 5):
+#         model_sequence = list(range(i, j + 1))
+#         print(model_sequence)
+#         # Map the numbers to actual models
+#         model_map = {
+#             1: gcn_norm_model,
+#             2: linear_model,
+#             3: before_msg_model,
+#             4: after_msg_model
+#         }
+#         selected_model_list = []
+#         for model_number in model_sequence:
+#             selected_model_list.append(model_map[model_number])
+#         # print(selected_model_list)
 
-        # Combine models into one sequence
-        combined_model = CombinedModel(selected_model_list)
+#         # Combine models into one sequence
+#         combined_model = CombinedModel(selected_model_list)
 
-        export_combined_model_to_onnx(combined_model, selected_model_list, data)
+#         export_combined_model_to_onnx(combined_model, selected_model_list, data)
+
+# Export the [1, 2], [3], [4]
+model_sequence = [[1, 2], [3], [4]]
+model_map = {
+    1: gcn_norm_model,
+    2: linear_model,
+    3: before_msg_model,
+    4: after_msg_model
+}
+for models in model_sequence:
+    selected_model_list = []
+    model_onnx_path = "Onnx/Combined_model_"
+    for model_number in models:
+        selected_model_list.append(model_map[model_number])
+        model_onnx_path += str(model_number)
+    model_onnx_path += ".onnx"
+    print(model_onnx_path)
+
+    # Combine models into one sequence
+    combined_model = CombinedModel(selected_model_list)
+    export_combined_model_to_onnx(combined_model, selected_model_list, data, model_onnx_path)
